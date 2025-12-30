@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+
+{% block title %}Analytics - FinanceFlow{% endblock %}
+
+{% block content %}
+<!-- Hidden data elements for JavaScript -->
+<div id="monthly-data" style="display: none;">{{ monthly_data|tojson|safe }}</div>
+<div id="category-data" style="display: none;">{{ category_data|tojson|safe }}</div>
+
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h2><i class="fas fa-chart-bar"></i> Expense Analytics</h2>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Monthly Expenses</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="monthlyChart"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Category Breakdown</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="categoryChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Budget Status Section -->
+{% if budget_status %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-piggy-bank"></i> Current Month Budget Status</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% for budget in budget_status %}
+                    <div class="col-md-6 mb-3">
+                        <div class="card border-{{ budget.status }}">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <h6 class="card-title mb-0">{{ budget.category }}</h6>
+                                    <span class="badge bg-{{ budget.status }}">
+                                        {{ "%.1f"|format(budget.percentage_used) }}% Used
+                                    </span>
+                                </div>
+                                <div class="progress mb-2" style="height: 10px;">
+                                    <div class="progress-bar bg-{{ budget.status }}" 
+                                         data-width="{{ '%.1f'|format(budget.percentage_used) }}"
+                                         style="width: 0%"></div>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <small class="text-muted">₹{{ "%.2f"|format(budget.spent) }} / ₹{{ "%.2f"|format(budget.budget) }}</small>
+                                    <small class="text-{{ 'danger' if budget.remaining < 0 else 'success' }}">
+                                        {% if budget.remaining < 0 %}
+                                            Over: ₹{{ "%.2f"|format(budget.remaining * -1) }}
+                                        {% else %}
+                                            Left: ₹{{ "%.2f"|format(budget.remaining) }}
+                                        {% endif %}
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Expense Summary</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            <h4 class="text-primary">{{ expenses|length }}</h4>
+                            <p class="text-muted">Total Transactions</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            <h4 class="text-success">₹{{ "%.2f"|format(expenses|sum(attribute='amount')) }}</h4>
+                            <p class="text-muted">Total Amount</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            <h4 class="text-info">{{ category_data|length }}</h4>
+                            <p class="text-muted">Categories</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            {% if expenses %}
+                                {% set avg = (expenses|sum(attribute='amount') / expenses|length) %}
+                                <h4 class="text-warning">₹{{ "%.2f"|format(avg) }}</h4>
+                            {% else %}
+                                <h4 class="text-warning">₹0.00</h4>
+                            {% endif %}
+                            <p class="text-muted">Average Expense</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Get data from hidden elements
+    const monthlyDataElement = document.getElementById('monthly-data');
+    const categoryDataElement = document.getElementById('category-data');
+    
+    const monthlyData = monthlyDataElement ? JSON.parse(monthlyDataElement.textContent) : {};
+    const categoryData = categoryDataElement ? JSON.parse(categoryDataElement.textContent) : {};
+    
+    // Monthly Chart
+    const monthlyCtx = document.getElementById('monthlyChart').getContext('2d');
+    
+    new Chart(monthlyCtx, {
+        type: 'line',
+        data: {
+            labels: Object.keys(monthlyData),
+            datasets: [{
+                label: 'Monthly Expenses',
+                data: Object.values(monthlyData),
+                borderColor: 'rgb(75, 192, 192)',
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                title: {
+                    display: true,
+                    text: 'Monthly Expense Trend'
+                }
+            }
+        }
+    });
+
+    // Category Chart
+    const categoryCtx = document.getElementById('categoryChart').getContext('2d');
+    
+    new Chart(categoryCtx, {
+        type: 'doughnut',
+        data: {
+            labels: Object.keys(categoryData),
+            datasets: [{
+                data: Object.values(categoryData),
+                backgroundColor: [
+                    '#FF6384',
+                    '#36A2EB',
+                    '#FFCE56',
+                    '#4BC0C0',
+                    '#9966FF',
+                    '#FF9F40',
+                    '#FF6384',
+                    '#C9CBCF'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                title: {
+                    display: true,
+                    text: 'Expense Distribution by Category'
+                }
+            }
+        }
+    });
+    
+    // Set progress bar widths from data attributes
+    document.querySelectorAll('.progress-bar[data-width]').forEach(bar => {
+        const width = bar.getAttribute('data-width');
+        bar.style.width = width + '%';
+    });
+</script>
+{% endblock %}
